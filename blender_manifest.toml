@@ -1,0 +1,48 @@
+# Blender extension manifest (Blender 4.2+).
+#
+# On Blender 4.2 and newer this file makes the add-on installable as an
+# *extension* (Preferences > Add-ons > Install from Disk, or drag-and-drop the
+# zip). On older Blender (3.0-4.1) this file is ignored and the add-on installs
+# the classic way from the ``bl_info`` block in ``__init__.py`` — so both paths
+# keep working from the same folder.
+schema_version = "1.0.0"
+
+id = "sonic_physics_addon"
+version = "1.1.0"
+name = "Sonic Physics"
+tagline = "Genesis-accurate Sonic physics with mesh collision"
+maintainer = "Generated with Claude Code"
+# Supported types: "add-on", "theme".
+type = "add-on"
+
+# Tags from Blender's predefined add-on tag list.
+tags = ["Animation", "Physics"]
+
+# The extension system only exists in Blender 4.2+, so that is the minimum here.
+# (The add-on itself still runs on Blender 3.0+ when installed the legacy way.)
+blender_version_min = "4.2.0"
+
+# License. Blender's manifest validator accepts only single, supported SPDX
+# identifiers here — compound "A OR B" expressions are rejected — and the
+# Extensions Platform requires add-ons (which use the bpy API) to be presented as
+# GPL, the license Blender itself ships under. So the manifest declares
+# GPL-3.0-or-later. The code itself stays dual-licensed (GPL-3.0-or-later OR MIT;
+# see the SPDX headers in the .py files) — GPL is simply the option this packaged
+# extension is distributed under.
+# https://docs.blender.org/manual/en/latest/advanced/extensions/licenses.html
+license = [
+  "SPDX:GPL-3.0-or-later",
+]
+
+# This add-on only reads/writes the current .blend and captures keyboard/mouse
+# during Simulate mode; it needs no file-system, network, camera or microphone
+# permissions, so none are declared.
+
+# Advanced build settings: what to leave OUT when building the extension zip.
+[build]
+paths_exclude_pattern = [
+  "__pycache__/",
+  "/.git/",
+  "/*.zip",
+  ".DS_Store",
+]
