@@ -18,23 +18,35 @@ Guide's formula.
 - ✅ **Getting hurt** — knockback arc, weak "hurt gravity", post-hit invulnerability
 - ✅ Air acceleration, air drag near the apex, mid-air angle recovery
 - ✅ Slope slipping / control-lock when too slow on a steep slope
+- ✅ **Add-menu objects** (Add ▸ Sonic Phys): **Springs**, **Rings**, **Monitors**,
+  **Motobugs**, **Spikes**, **Bumpers**
+- ✅ Three new **collision types**: **Ice** (low friction), **Water** (underwater
+  physics + a drowning air timer), **Quicksand** (sink unless you mash jump)
+- ✅ Seven toggleable **character moves**: **Flight** (Tails), **Gliding** &
+  **Climbing** (Knuckles), **Drop Dash** (Mania), **Homing Attack**, **Boost**,
+  **Hovering** — plus a spin-dash on/off toggle and the classic ringless-hit death
+- ✅ **20 game presets** (Sonic 1 → Superstars) + **save your own presets**
+- ✅ Optional **TASing** — record every button per frame as keyframes, edit the
+  curves, then re-simulate deterministically
 - ✅ Optional **curve-as-ground** (the curve is a floor, not gravity — you jump
   off it ballistically), now able to **follow the curve's 3D depth** and yaw to
   face along the path
 - ✅ Optional **shape-accurate mesh collision** against any collection of meshes,
   with per-object **surface types** — Walkable, Damage, Trigger, Speed-Up
-  (booster) — and **live rebuilding** of animated / rigid-body / simulated colliders
+  (booster), Ice, Water, Quicksand — and **live rebuilding** of animated /
+  rigid-body / simulated colliders
 - ✅ Optional **animation baking** for timeline playback
 - ✅ A bundled **pre-made Sonic model** you can import with one button
-- ✅ ~50 live **custom attributes** written to the empty every frame
+- ✅ ~70 live **custom attributes** written to the empty every frame
 
-The physics core has **94 unit tests** (including the Super Peel Out, the hurt
-state, speed boosters, and the collision-world floor/wall/ceiling surfaces) and
-the Blender layer has headless integration checks (registration, install/enable,
-both player types, the full tick → bake → playback pipeline, spindash,
-curve-ground). The pure-Python core tests all pass; the Blender layer is
-compile-checked and defensively coded (the sandbox that generated this can't run
-Blender itself).
+The physics core has **159 unit tests** (the classic set plus ice, water &
+drowning, quicksand, springs, rings & ring-loss, boost, drop dash, flight, glide,
+climb, homing, hover, the spin-dash gate, and all 20 presets) and the Blender
+layer has headless integration checks (registration, install/enable, both player
+types, the full tick → bake → playback pipeline, spindash, curve-ground). The
+pure-Python core tests all pass; the Blender layer is compile-checked, executed
+under a mock `bpy`, and defensively coded (the sandbox that generated this can't
+run Blender itself).
 
 ---
 
@@ -48,11 +60,15 @@ Blender itself).
   `mathutils.bvhtree`; if a stripped-down build lacks it, collision simply
   disables itself and everything else keeps working.
 
-> **This release is 1.1.0.** It adds mesh collision, the Super Peel Out, the
-> hurt state, and 3D curve-depth following on top of 1.0. The 2D physics core is
-> covered by the unit tests; the new Blender-side code (BVH collision, curve
-> depth) is compile-checked and written defensively, but hasn't been run inside
-> a live Blender at the time of writing — see *Limitations*.
+> **This release is 1.2.0.** On top of 1.1's mesh collision, Super Peel Out and
+> hurt state, it adds **Add-menu objects** (springs, rings, Motobugs), three new
+> **collision types** (ice, water + drowning, quicksand), seven toggleable
+> **character moves** (flight, gliding, climbing, drop dash, homing, boost,
+> hovering), **20 game presets** plus saveable custom presets, and optional
+> **TASing** (record inputs as keyframes, edit, and re-simulate). The 2D physics
+> core is covered by **159 unit tests**; the new Blender-side code is
+> compile-checked, imports under a mock `bpy`, and written defensively, but hasn't
+> been run inside a live Blender at the time of writing — see *Limitations*.
 
 ---
 
@@ -110,17 +126,19 @@ tab.
 | Keyboard        | SEGA control | Sonic action |
 |-----------------|--------------|--------------|
 | **Arrow keys**  | D-Pad        | Move / duck / look up |
-| **A**           | A button     | Jump |
-| **S**           | B button     | Jump |
-| **D**           | C button     | Jump |
-| **Q**           | X button     | (spare) |
+| **A**           | A button     | Jump (+ air ability) |
+| **S**           | B button     | Jump (+ air ability) |
+| **D**           | C button     | Jump (+ air ability) |
+| **Q**           | X button     | **Boost** (when enabled) |
 | **W**           | Y button     | (spare) |
 | **E**           | Z button     | (spare) |
 | **Enter**       | Start        | (spare) |
 | **Esc**         | —            | **End simulation** |
 
-Jump is **A / B / C** (any). X / Y / Z / Start are tracked as attributes but are
-free for you to wire up to your own logic.
+Jump is **A / B / C** (any). The optional **air abilities** (flight, gliding,
+drop dash, homing, hover) are all triggered with the jump button **while
+airborne**; **Boost** is the **X** button (`Q`). Y / Z / Start are tracked as
+attributes but are free for you to wire up to your own logic.
 
 ### Moveset
 
@@ -144,6 +162,34 @@ free for you to wire up to your own logic.
 > Because Sonic CD binds the Peel Out to *Up + jump*, enabling it means **Up +
 > jump no longer performs a plain jump** while standing still. Turn
 > **Enable Super Peel Out** off in *Physics Constants* to get the plain jump back.
+
+### Optional character moves (Character Moves panel)
+
+All of these are **off by default** — toggle the ones your character should have.
+The **spin dash** is on by default; turn it **off** for Sonic 1 / Sonic CD.
+
+- **Flight** (Tails) — in the air, **tap** a jump button to flap and gain height.
+  Gravity is floaty while the flight timer (8 s by default) lasts; when it runs
+  out Tails tires and falls until he lands.
+- **Gliding** (Knuckles) — **hold** a jump button in the air to glide: upward
+  motion is cancelled, you descend slowly, and you build/steer forward speed.
+- **Climbing** (Knuckles) — glide into a wall (needs *Mesh Collision*) to cling
+  on; **Up/Down** climb, a jump leaps off. 
+- **Drop Dash** (Mania) — **hold** the jump button after jumping to charge; the
+  moment you land you launch into a rolling dash.
+- **Homing Attack** — in the air, **press** a jump button to dash at the nearest
+  **Motobug** within range; destroying it bounces you so you can chain hits.
+- **Boost** — hold the **X** button (`Q`) to hold a high speed while a boost meter
+  drains (and refills when you're not boosting).
+- **Hovering** — **hold** a jump button at the apex to hang in the air briefly.
+
+> Flight, gliding, drop dash, homing and hovering all use the **jump button in
+> the air**, so a character normally has just one. If you enable several, a fixed
+> priority decides which runs: **homing ▸ flight ▸ glide ▸ drop dash ▸ hover**.
+
+See **[Game presets](#game-presets)** to enable the right moves for a given game
+in one click, and **[Add-menu objects](#add-menu-objects--springs-rings-motobugs)**
+for the springs, rings and badniks these moves interact with.
 
 ---
 
@@ -180,12 +226,28 @@ free for you to wire up to your own logic.
 - With a mesh in the collection **selected**, a per-object box appears to set its
   **Surface Type** and options (see *Mesh collision* below).
 
+**Objects (Springs / Rings / Badniks)** — buttons to add a Spring, Ring or
+Motobug, plus a per-object editor for the selected object's **Sonic Object**
+settings (kind, power/direction/value, touch radius). See *Add-menu objects*.
+
+**Character Moves** — the spin-dash and Peel-Out toggles, the **Ringless Hit Is
+Fatal** switch, the seven optional air/boost abilities, and tuning fields for
+whichever moves you've enabled. See *Optional character moves*.
+
+**Game Presets** — the game dropdown (applies on pick), an **Apply** button, an
+authentic/approximate note, and the **Save / remove** controls for your own
+presets. See *Game presets*.
+
+**TAS (Input Recording)** — the **Record Inputs** toggle plus **Play Back TAS**
+and **Clear TAS Channels**. See *TASing*.
+
 **Physics Constants** — every tunable value, defaulting to authentic Sonic 1.
 Includes a **Reset To Sonic 1 Defaults** button, plus **Super Peel Out**
 (enable, charge time, launch speed) and **Damage** (hurt gravity, invulnerability
 length) groups.
 
-**Live Attributes** — a readout of the key state values and flags (updates as you
+**Live Attributes** — a readout of the key state values and flags (rings, badniks,
+air timer, boost energy, death cause, and all the state checkboxes; updates as you
 simulate, and reflects the current frame during baked playback).
 
 ---
@@ -255,13 +317,24 @@ Select a collider in the collection to give it a **Surface Type** in the panel:
     or force *Left* / *Right* along the path. It also turns the player to face
     that way.
   - **Boost Power** — the speed it sets, in px/f (classic boosters use **16**).
+- **Ice** — a **solid** floor with greatly reduced friction and deceleration, so
+  you slide (the multiplier is tunable inline; 0.25 by default).
+- **Water** — a **passthrough** volume that gives **underwater physics**: halved
+  acceleration/top speed, much lower (floaty) gravity, and a weaker jump. It also
+  starts an **air timer** (30 s by default) that counts down while you're under;
+  at zero you **drown** (`Is_Dead`, `Sonic_Death_Cause = "drowned"`). Leaving the
+  water refills your air. Entering makes a small splash that halves your speed.
+- **Quicksand** — a **passthrough** volume you **sink** into slowly; **mash the
+  jump button** to climb back out. Sink out of the *bottom* of the volume and you
+  die (`Sonic_Death_Cause = "quicksand"`).
 
 **Pairing Damage / Speed-Up with Trigger.** Normally Damage and Speed-Up are
 solid faces you touch. Tick **Passthrough Trigger** on either one to make it a
 volume you pass *through* that applies its effect (hurt / boost) the whole time
-you're inside — e.g. a hazard cloud, or a speed field. (A plain **Trigger** has
-no contact effect; it only reports.) Only one surface type is active at a time,
-except this Trigger pairing.
+you're inside — e.g. a hazard cloud, or a speed field. (**Water** and
+**Quicksand** are always passthrough volumes; **Ice** is always solid.) A plain
+**Trigger** has no contact effect; it only reports. Only one surface type is
+active at a time, except this Trigger pairing.
 
 **Moving colliders.** Each object has a **Rebuild** mode:
 
@@ -281,7 +354,93 @@ counts) when a simulation starts.
 
 ---
 
-## Baking
+## Add-menu objects — Springs, Rings, Monitors, Motobugs, Spikes, Bumpers
+
+Under **Add ▸ Sonic Phys** (Shift+A), or the buttons in the **Objects** panel,
+you can drop six gameplay objects into the scene. Each is a normal mesh tagged
+with an **`obj.sonic_object`** setting; the simulation reacts to them by proximity
+(a tunable **Touch Radius**, in pixels), so they do **not** need to be in the mesh
+collision collection.
+
+- **Spring** — launches the player on contact. Set its **Power** (yellow = 10,
+  red = 16) and **Direction** (Up, Up+Forward, Up+Back, Forward, Back, Down; the
+  direction is in *path space*). A vertical spring keeps your horizontal
+  momentum; a horizontal one sets it.
+- **Ring** — collected on contact: it adds to the ring count (**Ring Value**,
+  default 1) and hides for the rest of the run. Getting hit **scatters** all your
+  rings (`Rings_Lost`). With **Ringless Hit Is Fatal** on (Character Moves panel),
+  a hit while you hold **zero** rings is deadly — the classic rule.
+- **Motobug** — a badnik. If you touch it **while attacking** (rolling, jumping,
+  spin/drop-dashing, homing, gliding or boosting) it's destroyed and you bounce
+  off it (chaining into another homing hit); otherwise it **hurts** you. Destroyed
+  badniks count into `Badniks_Destroyed`. With **Homing Attack** enabled, the
+  nearest Motobug in range is what your homing dash locks onto.
+- **Spikes** — a hazard that **hurts on contact even while attacking** (rolling or
+  jumping onto them still hurts; only post-hit invulnerability protects you), just
+  like the classic games. Unlike a Motobug, spikes are never destroyed.
+- **Bumper** — a pinball bumper that **bounces the player away from its centre**
+  (omnidirectional) at a tunable **Bounce Power**. Great for Casino/Spring-Yard
+  style setups.
+- **Monitor** — an item box. **Break it while attacking** to collect its **Rings
+  Inside** (default 10) and bounce off it; walk into it without attacking and
+  nothing happens.
+
+You can turn any object into one of these (or back to *None*) with the **Sonic
+Object** dropdown in the Objects panel while it's selected.
+
+---
+
+## Game presets
+
+The **Game Presets** panel loads a whole game's feel — physics constants **and**
+which moves are enabled — in one click. Pick a game from the dropdown (it applies
+immediately; the **✓** button re-applies it):
+
+Sonic 1, Sonic 1 (Game Gear), Sonic CD, Sonic 2, Sonic 2 (Game Gear), Sonic 3,
+Sonic Blast, Sonic Advance, Sonic Advance 2, Sonic Advance 3, Sonic Rush, Sonic
+Rush Adventure, Sonic Colors (DS), Sonic 4 Ep. I, Sonic 4 Ep. II, Sonic
+Generations (Console), Sonic Generations (3DS), Sonic Mania, Sonic Forces, Sonic
+Superstars.
+
+> **Authentic vs approximate.** The **Mega Drive / Genesis-era** titles — Sonic 1,
+> 2, 3, CD, Mania and Superstars — use the documented disassembly / Physics-Guide
+> constants and are labelled **authentic**. Everything else (the 8-bit Game Gear
+> titles, Blast, the Dimps handhelds — Advance / Rush / Colors — and the modern
+> boost games — Sonic 4 / Generations / Forces) is a **clearly-labelled
+> approximation**: those engines aren't documented at the sub-pixel level, so the
+> presets are hand-tuned to feel roughly right and to switch on the abilities each
+> game is known for (e.g. Rush/Colors/Generations/Forces enable **Boost** +
+> **Homing**; Mania/Superstars enable the **Drop Dash**; CD enables the **Peel
+> Out**; Sonic 1 turns the **spin dash off**). Treat them as a starting point.
+
+**Save your own presets.** Set the constants and moves however you like, then use
+**Save Settings As Preset** (the **＋** in the *Your saved presets* box) to store
+them as a named Blender preset. They reappear in the menu next to the **－**
+(remove) button. (This uses Blender's standard preset system; on the rare build
+without it, the save UI is simply hidden.)
+
+---
+
+## TASing — record & replay inputs
+
+Turn on **Record Inputs (TAS)** in the **TAS** panel, then **Simulate** as normal.
+Every button is keyframed **per frame** onto the player as **`TAS_*` channels**
+(`TAS_Left`, `TAS_Right`, `TAS_Up`, `TAS_Down`, `TAS_A` … `TAS_Start`), with
+**constant** interpolation, alongside the usual motion bake.
+
+Because the inputs are ordinary F-curves, you can **edit them** in the Graph
+Editor / Dope Sheet — nudge a jump a frame earlier, extend a held direction,
+delete a mistake — and then press **Play Back TAS**. That re-runs the physics
+**deterministically** from the (edited) `TAS_*` curves, through the same terrain,
+mesh collision, volumes and objects, and re-bakes the resulting motion. **Clear
+TAS Channels** removes the recording.
+
+This gives you a simple tool-assisted workflow: perform a rough run, then refine
+it frame-by-frame on the curves until it's frame-perfect.
+
+---
+
+
 
 With **Bake Animation** on, the whole run is recorded and, when you press `Esc`,
 written to the player as keyframes (a fresh `SonicBake` action):
@@ -329,6 +488,20 @@ as 0/1.
 **Boosters & path** (the last two written by the Blender layer)
 `Is_Boosted`, `Path_Yaw` (degrees, the curve heading), `Triggers_Inside` (how
 many trigger volumes currently contain the player)
+
+**Rings / water / quicksand / death**
+`Ring_Count`, `Rings_Lost`, `Badniks_Destroyed`, `Is_Underwater`, `Air_Timer`
+(frames of air left), `In_Quicksand`, `Is_On_Ice`, `Is_Dead`, `Is_Sprung`.
+The death reason is written as a **string** `Sonic_Death_Cause` (`"drowned"`,
+`"quicksand"` or `"hit"`).
+
+**Character moves**
+`Is_Flying`, `Flight_Timer`, `Is_Gliding`, `Is_Climbing`, `Is_DropDash_Charging`,
+`DropDash_Ready`, `Is_Homing`, `Is_Boosting`, `Boost_Energy`, `Is_Hovering`
+
+**TAS** (only when *Record Inputs* is on)
+`TAS_Left`, `TAS_Right`, `TAS_Up`, `TAS_Down`, `TAS_A`, `TAS_B`, `TAS_C`,
+`TAS_X`, `TAS_Y`, `TAS_Z`, `TAS_Start` (0/1 per frame, constant interpolation)
 
 Trigger volumes additionally get `Sonic_Trigger_Active` and `Sonic_Player_Inside`
 written onto **the trigger object** (not the player).
@@ -440,11 +613,31 @@ Honest boundaries of what this add-on does, so nothing surprises you:
   standing up from a roll doesn't test for a low ceiling.
 - **Enabling the Super Peel Out replaces the standing Up+jump.** That's authentic
   to Sonic CD; toggle it off if you want a plain jump from Up + jump.
+- **Non-Genesis presets are approximations.** Only the Mega Drive / Genesis-era
+  titles (Sonic 1, 2, 3, CD, Mania, Superstars) use documented constants. The
+  8-bit, Advance, Rush, Colors, Sonic 4, Generations and Forces presets are
+  clearly labelled hand-tuned approximations — a starting point, not exact
+  reproductions of those engines.
+- **The optional moves are simplified.** Flight, gliding, climbing, drop dash,
+  homing, boost and hovering capture each ability's *feel* and inputs, but they're
+  not frame-exact recreations of any particular game, and their default numbers
+  are tunable rather than disassembly-derived. Climbing in particular needs
+  **mesh-collision walls** to cling to.
+- **Springs / rings / badniks react by proximity.** Contact is a distance check
+  against each object's **Touch Radius**, not full mesh overlap, and destroyed /
+  collected objects are hidden live and restored when the run ends (the hiding
+  isn't keyframed). `Ring_Count`/`Badniks_Destroyed` *are* baked on the player.
+- **TAS playback re-runs the physics, not the whole editor session.** It replays
+  the recorded/edited `TAS_*` curves through the same terrain, collision, volumes
+  and objects and re-bakes the motion; it's deterministic, but only as faithful as
+  those inputs. Animated colliders still advance the timeline during playback when
+  *Advance Timeline* is on.
 - **The Blender-side collision code hasn't been run in a live Blender here.** The
-  2D physics core is covered by 94 passing unit tests, and the whole add-on
-  compiles, but the BVH collision / curve-depth paths were written and
-  compile-checked in an environment without Blender. Treat 1.1.0's collision as
-  "should work, please shake it out."
+  2D physics core is covered by **159 passing unit tests**, and the whole add-on
+  compiles *and imports* under a mock `bpy`, but the BVH collision / curve-depth /
+  object / volume paths were written and checked in an environment without
+  Blender. Treat this release's Blender integration as "should work, please shake
+  it out."
 
 ---
 
@@ -499,10 +692,12 @@ sonic_physics_addon/
     sonic_core.py    Pure-Python physics engine (no Blender deps, fully unit-tested)
     Sonic.blend      Bundled pre-made character (the SonicTheHedgehog collection)
 tests/
-    test_sonic_core.py   94 physics unit tests (core + peel out, hurt, boosters, collision world)
+    test_sonic_core.py   159 physics unit tests (core + peel out, hurt, boosters,
+                         collision world, ice/water/quicksand, springs/rings,
+                         boost/dropdash/flight/glide/climb/homing/hover, presets)
     blender_smoke.py     registration / install / operators / panels
     blender_smoke2.py    operator tick -> history -> bake -> playback pipeline
-sonic_physics_addon.zip  ready-to-install add-on (v1.1.0)
+sonic_physics_addon.zip  ready-to-install add-on (v1.2.1)
 README.md
 ```
 
