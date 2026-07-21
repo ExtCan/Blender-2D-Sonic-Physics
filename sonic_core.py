@@ -157,11 +157,82 @@ SKID_SPEED_THRESHOLD = 4.0   # $400 ; skid ("stopping") animation kicks in above
 
 
 # =============================================================================
+#  EXTENDED SURFACES / VOLUMES  (ice, water, quicksand)
+# =============================================================================
+# -- Ice (a low-friction floor surface) ---------------------------------------
+ICE_FRICTION_MULT = 0.25   # friction / deceleration are quartered on ice
+
+# -- Water (a passthrough volume: underwater physics + drowning) --------------
+# Underwater the classic games roughly halve movement and greatly reduce gravity;
+# a ~30 s air timer counts down and, at zero, Sonic drowns.  Values from the SPG.
+WATER_ACCEL_MULT    = 0.5
+WATER_TOP_MULT      = 0.5
+WATER_FRICTION_MULT = 0.5
+WATER_GRAVITY_MULT  = 0.2857   # 0.0625 / 0.21875 -> the $10 underwater gravity
+WATER_JUMP_MULT     = 0.53     # keeps jump apex ~equal under the lower gravity
+AIR_TIME            = 1800      # frames of air underwater (30 s @ 60fps) before drowning
+
+# -- Quicksand (a passthrough volume: sink unless the jump button is mashed) ---
+QUICKSAND_SINK  = 0.35   # px/frame the feet sink while idle in quicksand
+QUICKSAND_CLIMB = 1.6    # px risen per jump press while mashing out
+QUICKSAND_DRAG  = 0.80   # horizontal velocity retained per frame in quicksand
+
+# -- Springs (launch pads) ----------------------------------------------------
+SPRING_POWER_YELLOW = 10.0     # $A00
+SPRING_POWER_RED    = 16.0     # $1000
+
+# -- Enemy rebound (bopping a badnik) -----------------------------------------
+ENEMY_BOUNCE_SPEED  = 5.0      # upward rebound after destroying an enemy
+
+
+# =============================================================================
+#  CHARACTER MOVES  (all opt-in; each is disabled unless enabled on the engine)
+# =============================================================================
+# These are not from the Sonic 1 disassembly -- they are later-game abilities.
+# The numbers below are hand-tuned to feel right and are all runtime-tunable.
+
+# -- Flight (Tails) -----------------------------------------------------------
+FLIGHT_TIME           = 480     # frames Tails can ascend before tiring (8 s)
+FLIGHT_ASCEND_IMPULSE = 0.5     # upward speed added per flap
+FLIGHT_MAX_UP         = 1.0     # cap on the upward speed flapping can build
+FLIGHT_GRAVITY_MULT   = 0.35    # floaty gravity while the flight timer is live
+
+# -- Gliding / Climbing (Knuckles) --------------------------------------------
+GLIDE_SPEED       = 4.0    # forward speed built while gliding
+GLIDE_ACCEL       = 0.03   # how fast glide speed builds
+GLIDE_FALL_SPEED  = 0.5    # steady descent rate while gliding
+CLIMB_SPEED       = 1.0    # up/down speed while clinging to a wall
+CLIMB_JUMP_X      = 3.5    # push-off speed when jumping away from a wall
+CLIMB_JUMP_Z      = 4.0    # up speed when jumping off a wall
+
+# -- Drop Dash (Sonic Mania) --------------------------------------------------
+DROPDASH_CHARGE_TIME = 20     # frames of jump held in the air before it arms
+DROPDASH_SPEED       = 8.0    # launch speed on landing (like a base spindash)
+DROPDASH_MAX         = 12.0   # cap when adding to existing momentum
+
+# -- Homing Attack (modern) ---------------------------------------------------
+HOMING_SPEED = 8.0     # dash speed toward the locked-on target
+HOMING_RANGE = 220.0   # how near a target must be to lock on (pixels)
+
+# -- Boost (modern) -----------------------------------------------------------
+BOOST_SPEED      = 12.0   # speed the boost holds you at
+BOOST_ENERGY_MAX = 100.0  # boost meter capacity
+BOOST_DRAIN      = 0.5    # meter drained per frame while boosting
+BOOST_REGEN      = 0.1    # meter regained per frame while not boosting
+
+# -- Hovering -----------------------------------------------------------------
+HOVER_TIME = 120   # frames you can hover at the apex before falling
+
+
+# =============================================================================
 #  SURFACES  (what a piece of collision *does* when touched)
 # =============================================================================
 SURFACE_WALKABLE = "WALKABLE"
 SURFACE_DAMAGE   = "DAMAGE"
 SURFACE_SPEEDUP  = "SPEED_UP"
+SURFACE_ICE       = "ICE"        # a solid floor with reduced friction
+SURFACE_WATER     = "WATER"      # a passthrough volume: underwater physics + drowning
+SURFACE_QUICKSAND = "QUICKSAND"  # a passthrough volume: sink unless the jump button is mashed
 
 
 @dataclass
@@ -430,6 +501,54 @@ class SonicEngine:
         self.wall_sensor_low = WALL_SENSOR_LOW
         self.wall_max_angle = WALL_MAX_ANGLE
 
+        # ---- extended surface / volume tunables -----------------------------
+        self.ice_friction_mult = ICE_FRICTION_MULT
+        self.water_accel_mult = WATER_ACCEL_MULT
+        self.water_top_mult = WATER_TOP_MULT
+        self.water_friction_mult = WATER_FRICTION_MULT
+        self.water_gravity_mult = WATER_GRAVITY_MULT
+        self.water_jump_mult = WATER_JUMP_MULT
+        self.air_time = AIR_TIME
+        self.quicksand_sink = QUICKSAND_SINK
+        self.quicksand_climb = QUICKSAND_CLIMB
+        self.quicksand_drag = QUICKSAND_DRAG
+        self.spring_power_yellow = SPRING_POWER_YELLOW
+        self.spring_power_red = SPRING_POWER_RED
+        self.enemy_bounce_speed = ENEMY_BOUNCE_SPEED
+        self.lethal_without_rings = False   # opt-in: a hit with 0 rings kills
+
+        # ---- move enables (all opt-in) --------------------------------------
+        self.enable_spindash = True      # Down + jump (Sonic 2+). Off for Sonic 1 / CD.
+        self.enable_flight = False       # Tails
+        self.enable_gliding = False      # Knuckles
+        self.enable_climbing = False     # Knuckles (needs walls; driven by the host)
+        self.enable_dropdash = False     # Sonic Mania
+        self.enable_homing = False       # modern (needs a target; driven by the host)
+        self.enable_boost = False        # modern
+        self.enable_hovering = False
+
+        # ---- move tunables --------------------------------------------------
+        self.flight_time = FLIGHT_TIME
+        self.flight_ascend_impulse = FLIGHT_ASCEND_IMPULSE
+        self.flight_max_up = FLIGHT_MAX_UP
+        self.flight_gravity_mult = FLIGHT_GRAVITY_MULT
+        self.glide_speed = GLIDE_SPEED
+        self.glide_accel = GLIDE_ACCEL
+        self.glide_fall_speed = GLIDE_FALL_SPEED
+        self.climb_speed = CLIMB_SPEED
+        self.climb_jump_x = CLIMB_JUMP_X
+        self.climb_jump_z = CLIMB_JUMP_Z
+        self.dropdash_charge_time = DROPDASH_CHARGE_TIME
+        self.dropdash_speed = DROPDASH_SPEED
+        self.dropdash_max = DROPDASH_MAX
+        self.homing_speed = HOMING_SPEED
+        self.homing_range = HOMING_RANGE
+        self.boost_speed = BOOST_SPEED
+        self.boost_energy_max = BOOST_ENERGY_MAX
+        self.boost_drain = BOOST_DRAIN
+        self.boost_regen = BOOST_REGEN
+        self.hover_time = HOVER_TIME
+
         # ---- state -----------------------------------------------------------
         self.x = 0.0
         self.z = 0.0
@@ -462,6 +581,42 @@ class SonicEngine:
         self.pushing = False         # solidly pressing into a wall
         self.skidding = False
         self.braking = False
+
+        # ---- extended state -------------------------------------------------
+        self.on_ice = False
+
+        self.underwater = False
+        self.air_timer = self.air_time
+        self.is_dead = False
+        self.death_cause = ""
+
+        self.in_quicksand = False
+
+        self.ring_count = 0
+        self.rings_lost = 0
+
+        self.sprung = False          # a spring launched us this frame (descriptive)
+
+        self.flying = False          # Tails flight active
+        self.flight_timer = 0
+        self.flight_tired = False    # flight time used up; can't refly until landing
+
+        self.gliding = False         # Knuckles glide active
+        self.climbing = False        # clinging to a wall
+        self.climb_wall_dir = 0      # +1 wall to the right, -1 to the left
+
+        self.dropdash_charging = False
+        self.dropdash_charge_frames = 0
+        self.dropdash_ready = False
+
+        self.homing_active = False
+        self.homing_target = None    # (x, z) in engine space, set by the host; None == no lock
+
+        self.boosting = False
+        self.boost_energy = self.boost_energy_max
+
+        self.hovering = False
+        self.hover_timer = 0
 
         # Bookkeeping for descriptive attributes.
         self._prev_x_vel = 0.0
@@ -516,6 +671,24 @@ class SonicEngine:
         self.skidding = False
         self.pushing = False
         self.boosted = False
+        self.sprung = False
+        self.boosting = False
+        self.in_quicksand = False
+
+        # Dead players just fall (the classic death arc), ignoring all input.
+        if self.is_dead:
+            self._step_dead()
+            self.frame += 1
+            return
+
+        # Underwater air countdown -> drowning.
+        if self.underwater and self.air_timer > 0:
+            self.air_timer -= 1
+            if self.air_timer <= 0:
+                self.die("drowned")
+                self._step_dead()
+                self.frame += 1
+                return
 
         # Post-landing invulnerability counts down while in control.
         if not self.is_hurt and self.invulnerability_timer > 0:
@@ -528,6 +701,15 @@ class SonicEngine:
 
         self._update_descriptive(inp)
         self.frame += 1
+
+    def _step_dead(self):
+        """A dead player: a brief upward hop (set by die()) then a plain fall,
+        with no control.  The host stops the simulation / flags the death."""
+        self.on_ground = False
+        self.ground_speed = 0.0
+        self.x_vel = 0.0
+        self.z += self.z_vel
+        self.z_vel -= self.gravity
 
     # ------------------------------------------------------------- GROUND
     def _step_ground(self, inp: Inputs):
@@ -573,7 +755,7 @@ class SonicEngine:
         # Up + jump while stationary starts a Super Peel Out (Sonic CD).
         if inp.jump_pressed:
             near_still = abs(self.ground_speed) < self.roll_min_speed
-            if inp.down and near_still and not self.rolling:
+            if self.enable_spindash and inp.down and near_still and not self.rolling:
                 self.spindash_active = True
                 self.spindash_revs = 0.0
                 self.ducking = True
@@ -597,6 +779,9 @@ class SonicEngine:
             self._roll_input(inp)
         else:
             self._walk_input(inp)
+
+        # ---- 3b. Boost (modern) --------------------------------------------
+        self._boost_move(inp)
 
         # ---- 4. Begin rolling? ---------------------------------------------
         if not self.rolling:
@@ -631,7 +816,13 @@ class SonicEngine:
     def _walk_input(self, inp: Inputs):
         locked = self.control_lock_timer > 0
         gsp = self.ground_speed
-        acc, dec, top = self.acceleration, self.deceleration, self.top_speed
+        # Ice cuts friction/deceleration; water cuts acceleration/top/friction.
+        water = self.water_accel_mult if self.underwater else 1.0
+        ice = self.ice_friction_mult if self.on_ice else 1.0
+        acc = self.acceleration * water
+        dec = self.deceleration * water * ice
+        top = self.top_speed * (self.water_top_mult if self.underwater else 1.0)
+        fric = self.friction * self._friction_scale()
 
         pressing_left = inp.left and not inp.right
         pressing_right = inp.right and not inp.left
@@ -668,16 +859,19 @@ class SonicEngine:
             # friction (no direction held); also applies while control-locked
             # with no key held.
             if gsp > 0:
-                gsp = max(0.0, gsp - self.friction)
+                gsp = max(0.0, gsp - fric)
             elif gsp < 0:
-                gsp = min(0.0, gsp + self.friction)
+                gsp = min(0.0, gsp + fric)
 
         self.ground_speed = gsp
 
     def _roll_input(self, inp: Inputs):
         locked = self.control_lock_timer > 0
         gsp = self.ground_speed
-        dec = self.roll_deceleration
+        water = self.water_accel_mult if self.underwater else 1.0
+        ice = self.ice_friction_mult if self.on_ice else 1.0
+        dec = self.roll_deceleration * water * ice
+        rfric = self.roll_friction * self._friction_scale()
 
         pressing_left = inp.left and not inp.right
         pressing_right = inp.right and not inp.left
@@ -698,9 +892,9 @@ class SonicEngine:
 
         # Rolling friction is always applied.
         if gsp > 0:
-            gsp = max(0.0, gsp - self.roll_friction)
+            gsp = max(0.0, gsp - rfric)
         elif gsp < 0:
-            gsp = min(0.0, gsp + self.roll_friction)
+            gsp = min(0.0, gsp + rfric)
 
         self.ground_speed = gsp
 
@@ -782,10 +976,31 @@ class SonicEngine:
         if best.surface.kind == SURFACE_DAMAGE:
             self.hurt(-dirn)
 
+    def _friction_scale(self) -> float:
+        """Combined friction multiplier from being underwater and/or on ice."""
+        s = 1.0
+        if self.underwater:
+            s *= self.water_friction_mult
+        if self.on_ice:
+            s *= self.ice_friction_mult
+        return s
+
+    def _eff_gravity(self) -> float:
+        """Gravity after water (floatier) and flight (floaty) modifiers."""
+        g = self.gravity
+        if self.underwater:
+            g *= self.water_gravity_mult
+        if self.flying and self.flight_timer > 0:
+            g *= self.flight_gravity_mult
+        return g
+
     def _apply_floor_surface(self, surface: Surface):
         """Gameplay effect of the floor the feet are planted on."""
         if surface is None:
+            self.on_ice = False
             return
+        # Ice is a plain solid floor whose only effect is reduced friction.
+        self.on_ice = (surface.kind == SURFACE_ICE)
         if surface.kind == SURFACE_DAMAGE:
             away = -self.facing if self.ground_speed == 0.0 \
                 else (-1 if self.ground_speed > 0 else 1)
@@ -805,6 +1020,7 @@ class SonicEngine:
             # Ran off a ledge / over a convex crest too fast -> become airborne.
             self.on_ground = False
             self.jumping = False
+            self.on_ice = False
             # keep ball form if rolling off a ramp;
             # world velocity was already set from ground speed this frame.
         else:
@@ -832,12 +1048,19 @@ class SonicEngine:
     def _do_jump(self):
         # Jump perpendicular to the ground surface, *added* to current velocity.
         # normal = (-sin theta, cos theta); jump adds jump_force along it.
+        jf = self.jump_force * (self.water_jump_mult if self.underwater else 1.0)
         n = self.ground_angle
-        self.x_vel = self.ground_speed * math.cos(n) - self.jump_force * math.sin(n)
-        self.z_vel = self.ground_speed * math.sin(n) + self.jump_force * math.cos(n)
+        self.x_vel = self.ground_speed * math.cos(n) - jf * math.sin(n)
+        self.z_vel = self.ground_speed * math.sin(n) + jf * math.cos(n)
         self.on_ground = False
         self.jumping = True
         self.pushing = False
+        self.on_ice = False
+        # A fresh jump resets the drop-dash charge and grants a hover budget.
+        self.dropdash_charging = False
+        self.dropdash_ready = False
+        self.dropdash_charge_frames = 0
+        self.hover_timer = self.hover_time
         # A jump always balls Sonic up; if he was already rolling it becomes a
         # roll-jump (no mid-air steering).
         self.roll_jump = self.rolling
@@ -845,12 +1068,43 @@ class SonicEngine:
 
     # ------------------------------------------------------------- AIR
     def _step_air(self, inp: Inputs):
+        # Clinging to a wall is a wholly separate mode.
+        if self.climbing:
+            self._step_climb(inp)
+            return
+
         z_before = self.z
         hurt = self.is_hurt
 
-        # ---- 1. Variable jump height ---------------------------------------
-        if (not hurt and self.jumping and self.z_vel > self.jump_release_cap
-                and not inp.jump_held):
+        # Which special air ability (if any) controls this frame?
+        ability = None if hurt else self._resolve_air_ability(inp)
+        # Any non-'dropdash' outcome cancels a drop-dash charge in progress.
+        if ability != 'dropdash' and self.dropdash_charging:
+            self.dropdash_charging = False
+            self.dropdash_ready = False
+            self.dropdash_charge_frames = 0
+
+        manages_vertical = False       # ability drives z_vel directly -> skip gravity
+        allow_air_control = (not hurt and not self.roll_jump and ability is None)
+
+        if ability == 'flight':
+            self._air_flight(inp)
+            allow_air_control = True           # Tails still steers left/right
+        elif ability == 'glide':
+            self._air_glide(inp)
+            manages_vertical = True
+        elif ability == 'homing':
+            self._air_homing(inp)
+            manages_vertical = self.homing_active
+        elif ability == 'hover':
+            self._air_hover(inp)
+            manages_vertical = True
+        elif ability == 'dropdash':
+            self._air_dropdash_charge(inp)     # a ball spin: no air control
+
+        # ---- 1. Variable jump height (a real jump only) --------------------
+        if (not hurt and self.jumping and ability is None
+                and self.z_vel > self.jump_release_cap and not inp.jump_held):
             self.z_vel = self.jump_release_cap
 
         # cap vertical speed (JumpHeight / screen scroll cap)
@@ -859,13 +1113,12 @@ class SonicEngine:
         elif self.z_vel < -self.max_y_speed:
             self.z_vel = -self.max_y_speed
 
-        # ---- 2. Air control (none while hurt or roll-jumping) ---------------
-        if not hurt and not self.roll_jump:
-            top = self.top_speed
-            air = self.air_acceleration
+        # ---- 2. Air control (none while hurt, roll-jumping, or in an ability)
+        if allow_air_control:
+            top = self.top_speed * (self.water_top_mult if self.underwater else 1.0)
+            air = self.air_acceleration * (self.water_accel_mult if self.underwater else 1.0)
             if inp.left and not inp.right:
                 self.facing = -1
-                # As on the ground, input accelerates only *up to* top speed.
                 if self.x_vel > -top:
                     self.x_vel -= air
                     if self.x_vel < -top:
@@ -877,20 +1130,21 @@ class SonicEngine:
                     if self.x_vel > top:
                         self.x_vel = top
 
-        # ---- 3. Air drag (never while hurt: Sonic_Hurt has no drag) ---------
-        # Applied only near the apex: rising (z_vel > 0) but slower than the cap.
-        if not hurt and 0.0 < self.z_vel < self.jump_release_cap:
-            drag = _asr(self.x_vel, AIR_DRAG_SHIFT)   # x_vel / 32, truncated toward zero
-            self.x_vel -= drag
+            # ---- 3. Air drag (only near the apex) --------------------------
+            if 0.0 < self.z_vel < self.jump_release_cap:
+                self.x_vel -= _asr(self.x_vel, AIR_DRAG_SHIFT)
 
-        # ---- 4. Move + gravity (ObjectFall: move with the *old* velocity,
-        #         then apply gravity to the velocity) ------------------------
+        # ---- 3b. Boost (modern) --------------------------------------------
+        self._boost_move(inp)
+
+        # ---- 4. Move + gravity ---------------------------------------------
         rising = self.z_vel > 0.0
         self._move_horizontal(self.x_vel, grounded=False)
         self.z += self.z_vel
-        self.z_vel -= self.hurt_gravity if hurt else self.gravity
+        if not manages_vertical:
+            self.z_vel -= self.hurt_gravity if hurt else self._eff_gravity()
 
-        # ---- 4b. Bump the head on a ceiling ---------------------------------
+        # ---- 4b. Bump the head on a ceiling --------------------------------
         if rising and self.world.has_ceilings:
             h = self._body_height
             climb = self.z - z_before
@@ -908,11 +1162,162 @@ class SonicEngine:
         elif self.ground_angle < 0.0:
             self.ground_angle = min(0.0, self.ground_angle + self.air_angle_return)
 
-        # ---- 6. Landing -----------------------------------------------------
+        # ---- 6. Landing ----------------------------------------------------
         fall = max(0.0, z_before - self.z)
         hit = self.world.floor(self.x, self.z, fall + 4.0, 0.0)
         if hit is not None and self.z <= hit.height:
             self._land(hit.height, hit.angle, hit.surface)
+
+    # -------------------------------------------------- air-ability dispatch
+    def _resolve_air_ability(self, inp: Inputs):
+        """Pick the single air ability that controls this frame, by priority:
+        homing > flight > glide > drop-dash > hover.  Only enabled moves are
+        considered, so a character normally exposes just one of them."""
+        if self.homing_active:
+            return 'homing'
+        if self.enable_homing and inp.jump_pressed and self._homing_can_lock():
+            self._start_homing()
+            return 'homing'
+        if self.flying and self.flight_timer > 0:
+            return 'flight'
+        if (self.enable_flight and inp.jump_pressed and not self.flight_tired
+                and not self.roll_jump):
+            self._start_flight()
+            return 'flight'
+        if self.enable_gliding and inp.jump_held and not self.roll_jump:
+            return 'glide'
+        if self.enable_dropdash and inp.jump_held and not self.roll_jump:
+            return 'dropdash'
+        if (self.enable_hovering and inp.jump_held and self.hover_timer > 0
+                and self.z_vel <= 0.0):
+            return 'hover'
+        # No ability -> make sure the lingering flags are cleared.
+        self.gliding = False
+        return None
+
+    def _start_flight(self):
+        self.flying = True
+        self.flight_timer = self.flight_time
+        self.rolling = False          # Tails flies upright
+        self.roll_jump = False
+
+    def _air_flight(self, inp: Inputs):
+        self.flying = True
+        if self.flight_timer > 0:
+            self.flight_timer -= 1
+        if self.flight_timer <= 0:
+            self.flying = False
+            self.flight_tired = True
+            return
+        # Each fresh jump press flaps: a bounded upward nudge.
+        if inp.jump_pressed and self.z_vel < self.flight_max_up:
+            self.z_vel = min(self.flight_max_up, self.z_vel + self.flight_ascend_impulse)
+
+    def _air_glide(self, inp: Inputs):
+        self.gliding = True
+        self.rolling = False
+        self.roll_jump = False
+        # Steady descent.
+        self.z_vel = -self.glide_fall_speed
+        # Steer, and build toward glide speed in the facing direction.
+        if inp.left and not inp.right:
+            self.facing = -1
+        elif inp.right and not inp.left:
+            self.facing = 1
+        target = self.glide_speed * self.facing
+        if self.x_vel < target:
+            self.x_vel = min(target, self.x_vel + self.glide_accel)
+        elif self.x_vel > target:
+            self.x_vel = max(target, self.x_vel - self.glide_accel)
+
+    def _homing_can_lock(self) -> bool:
+        if self.homing_target is None:
+            return False
+        tx, tz = self.homing_target
+        return math.hypot(tx - self.x, tz - self.z) <= self.homing_range
+
+    def _start_homing(self):
+        self.homing_active = True
+        self.rolling = True
+        self.roll_jump = False
+
+    def _air_homing(self, inp: Inputs):
+        if self.homing_target is None:
+            # Lost the lock -> a short forward air dash, then normal fall.
+            self.homing_active = False
+            self.x_vel = self.homing_speed * (self.facing if self.facing != 0 else 1)
+            return
+        tx, tz = self.homing_target
+        dx, dz = tx - self.x, tz - self.z
+        dist = math.hypot(dx, dz)
+        if dist < 1e-4:
+            self.x_vel = 0.0
+            self.z_vel = 0.0
+            return
+        self.x_vel = self.homing_speed * dx / dist
+        self.z_vel = self.homing_speed * dz / dist
+        self.facing = 1 if dx >= 0 else -1
+
+    def _air_hover(self, inp: Inputs):
+        self.hovering = True
+        if self.hover_timer > 0:
+            self.hover_timer -= 1
+        # Hold height (a gentle hover); when the budget runs out, fall.
+        if self.hover_timer > 0:
+            self.z_vel = 0.0
+        else:
+            self.hovering = False
+
+    def _air_dropdash_charge(self, inp: Inputs):
+        self.rolling = True
+        self.dropdash_charging = True
+        self.dropdash_charge_frames += 1
+        if self.dropdash_charge_frames >= self.dropdash_charge_time:
+            self.dropdash_ready = True
+
+    def _step_climb(self, inp: Inputs):
+        """Clinging to a wall (Knuckles).  Up/Down crawl; a jump leaps away.
+        The host keeps x pinned to the wall and ends the climb at the top or
+        bottom (by clearing self.climbing / re-grounding the player)."""
+        self.climbing = True
+        self.gliding = False
+        self.flying = False
+        self.x_vel = 0.0
+        self.z_vel = 0.0
+        if inp.jump_pressed:
+            # Wall-jump: push away from the wall.
+            d = -self.climb_wall_dir if self.climb_wall_dir else -self.facing
+            d = 1 if d >= 0 else -1
+            self.climbing = False
+            self.x_vel = self.climb_jump_x * d
+            self.z_vel = self.climb_jump_z
+            self.facing = d
+            self.jumping = True
+            self.rolling = True
+            return
+        if inp.up and not inp.down:
+            self.z += self.climb_speed
+        elif inp.down and not inp.up:
+            self.z -= self.climb_speed
+
+    def _boost_move(self, inp: Inputs):
+        """Modern boost: hold the boost button (X) to hold a high speed while a
+        meter drains; the meter refills slowly when not boosting."""
+        if not self.enable_boost:
+            return
+        if inp.x and self.boost_energy > 0.0:
+            self.boosting = True
+            self.boost_energy = max(0.0, self.boost_energy - self.boost_drain)
+            d = self.facing if self.facing != 0 else 1
+            spd = self.boost_speed
+            if self.on_ground:
+                if (d > 0 and self.ground_speed < spd) or (d < 0 and self.ground_speed > -spd):
+                    self.ground_speed = spd * d
+            else:
+                if (d > 0 and self.x_vel < spd) or (d < 0 and self.x_vel > -spd):
+                    self.x_vel = spd * d
+        else:
+            self.boost_energy = min(self.boost_energy_max, self.boost_energy + self.boost_regen)
 
     def _land(self, gz: float, theta: float, surface: Surface = WALKABLE_SURFACE):
         self.z = gz
@@ -920,6 +1325,7 @@ class SonicEngine:
         self.jumping = False
         self.roll_jump = False
         self.ground_angle = theta
+        launched_dropdash = False
         if self.is_hurt:
             # Sonic_HurtStop: touching the floor zeroes both speeds, ends the
             # hurt state and starts the post-hit invulnerability countdown.
@@ -928,12 +1334,34 @@ class SonicEngine:
             self.x_vel = 0.0
             self.z_vel = 0.0
             self.invulnerability_timer = self.invulnerability_time
+        elif self.dropdash_ready:
+            # Drop Dash: land into a rolling burst in the facing direction,
+            # adding to (and capped above) any speed carried in.
+            d = self.facing if self.facing != 0 else 1
+            launch = self.dropdash_speed * d
+            if abs(self.ground_speed) < abs(launch) or (self.ground_speed > 0) != (launch > 0):
+                self.ground_speed = launch
+            else:
+                self.ground_speed += self.dropdash_speed * 0.5 * d
+            if self.ground_speed > self.dropdash_max:
+                self.ground_speed = self.dropdash_max
+            elif self.ground_speed < -self.dropdash_max:
+                self.ground_speed = -self.dropdash_max
+            launched_dropdash = True
         else:
             self.ground_speed = self._landing_speed(self.x_vel, self.z_vel, theta)
-        # Leaving the air ends the ball form unless Down is still (re)initiating
-        # a roll -- that decision is deferred to next frame's roll check, so we
-        # simply stand up here.
-        self.rolling = False
+        # Reset air-move state on touchdown.
+        self.flying = False
+        self.flight_timer = 0
+        self.flight_tired = False
+        self.gliding = False
+        self.hovering = False
+        self.homing_active = False
+        self.dropdash_charging = False
+        self.dropdash_ready = False
+        self.dropdash_charge_frames = 0
+        # Drop Dash lands already rolling; everything else stands up.
+        self.rolling = launched_dropdash
         self._apply_floor_surface(surface)
 
     def _landing_speed(self, xv: float, zv: float, theta: float) -> float:
@@ -995,31 +1423,164 @@ class SonicEngine:
         """Take a hit (Sonic_Hurt).  ``away_sign`` is the horizontal direction
         of the knockback (+1 flings right, -1 left, 0 == opposite of facing).
         Returns True if damage was actually applied (False while hurt or
-        invulnerable)."""
+        invulnerable).  Rings scatter on every hit; if ``lethal_without_rings``
+        is set and the player had none, the hit is fatal instead."""
+        if self.is_dead:
+            return False
         if self.is_hurt or self.invulnerability_timer > 0:
             return False
-        if away_sign == 0:
-            away_sign = -self.facing if self.facing != 0 else -1
-        self.is_hurt = True
+        had_rings = self.ring_count > 0
+        self.rings_lost = self.ring_count
+        self.ring_count = 0
         self.hits_taken += 1
         # Any charge/state is dropped on the spot.
-        self.on_ground = False
-        self.jumping = False
-        self.roll_jump = False
-        self.rolling = False
         self.spindash_active = False
         self.spindash_revs = 0.0
         self.peelout_active = False
         self.peelout_timer = 0
+        self.flying = False
+        self.flight_timer = 0
+        self.gliding = False
+        self.climbing = False
+        self.hovering = False
+        self.homing_active = False
+        self.dropdash_charging = False
+        self.dropdash_ready = False
+        self.boosting = False
         self.ducking = False
         self.looking_up = False
         self.skidding = False
         self.pushing = False
+
+        if self.lethal_without_rings and not had_rings:
+            self.die("hit")
+            return True
+
+        if away_sign == 0:
+            away_sign = -self.facing if self.facing != 0 else -1
+        self.is_hurt = True
+        self.on_ground = False
+        self.jumping = False
+        self.roll_jump = False
+        self.rolling = False
         # Knockback: up and away from the hazard, then hurt-gravity ballistics.
         self.ground_speed = 0.0
         self.x_vel = self.hurt_x_force * away_sign
         self.z_vel = self.hurt_z_force
         return True
+
+    # ---------------------------------------------------- objects / actions
+    def die(self, cause: str = "") -> None:
+        """Kill the player (drowning, quicksand, a fatal hit...).  Sets a brief
+        upward hop then a plain fall via _step_dead(); the host reads is_dead /
+        death_cause and stops or restarts the run."""
+        if self.is_dead:
+            return
+        self.is_dead = True
+        self.death_cause = cause
+        self.on_ground = False
+        self.rolling = False
+        self.jumping = False
+        self.flying = self.gliding = self.climbing = self.hovering = False
+        self.spindash_active = self.peelout_active = False
+        self.homing_active = self.dropdash_charging = self.boosting = False
+        self.ground_speed = 0.0
+        self.x_vel = 0.0
+        self.z_vel = 7.0            # classic death hop
+
+    def spring(self, power: float, dir_x: float = 0.0, dir_z: float = 1.0) -> None:
+        """Launch off a spring.  (dir_x, dir_z) is the launch direction in engine
+        space (+x right along the path, +z up); it is normalised here.  A mostly
+        vertical spring preserves horizontal momentum; a horizontal one sets it.
+        Springs give no variable-height control."""
+        mag = math.hypot(dir_x, dir_z) or 1.0
+        ux, uz = dir_x / mag, dir_z / mag
+        self.on_ground = False
+        self.jumping = False
+        self.roll_jump = False
+        self.dropdash_charging = False
+        self.dropdash_ready = False
+        if uz > 0.3:
+            self.rolling = False
+        if abs(ux) > 1e-6:
+            self.x_vel = power * ux
+            self.ground_speed = power * ux
+            self.facing = 1 if ux > 0 else -1
+        self.z_vel = power * uz
+        self.sprung = True
+
+    def collect_ring(self, n: int = 1) -> int:
+        """Pick up rings.  Returns the new total."""
+        self.ring_count += int(n)
+        return self.ring_count
+
+    def attack_active(self) -> bool:
+        """True when the player would destroy a badnik on contact (rolling,
+        jumping, spin/drop-dashing, homing, gliding, boosting or invulnerable)
+        rather than take damage from it."""
+        if self.is_invulnerable:
+            return True
+        if self.rolling or self.spindash_active or self.dropdash_charging:
+            return True
+        if (not self.on_ground) and (self.jumping or self.roll_jump
+                                     or self.homing_active or self.gliding):
+            return True
+        return bool(self.boosting)
+
+    def bounce_enemy(self) -> None:
+        """Rebound after destroying a badnik (a bop / homing hit)."""
+        self.on_ground = False
+        self.homing_active = False
+        self.jumping = True
+        self.rolling = True
+        if self.z_vel < self.enemy_bounce_speed:
+            self.z_vel = self.enemy_bounce_speed
+
+    def start_climb(self, wall_dir: int = 0) -> None:
+        """Begin clinging to a wall (the host calls this when a gliding player
+        contacts one).  wall_dir: +1 wall to the right, -1 to the left."""
+        self.climbing = True
+        self.gliding = False
+        self.flying = False
+        self.on_ground = False
+        self.climb_wall_dir = wall_dir
+        if wall_dir:
+            self.facing = wall_dir
+        self.x_vel = 0.0
+        self.z_vel = 0.0
+
+    def set_underwater(self, flag: bool) -> None:
+        """Enter or leave water.  Entering splashes (halves speeds); leaving
+        refills the air supply.  The host calls this each frame from volume
+        overlap; the underwater physics themselves lag entry/exit by one frame."""
+        flag = bool(flag)
+        if flag and not self.underwater:
+            self.x_vel *= 0.5
+            self.ground_speed *= 0.5
+            if self.z_vel < 0.0:
+                self.z_vel *= 0.5
+        elif not flag and self.underwater:
+            self.air_timer = self.air_time
+        self.underwater = flag
+
+    def apply_quicksand(self, inp: Inputs) -> None:
+        """Sink slowly unless the jump button is mashed (each press pops you up).
+        The host calls this each frame the player overlaps a quicksand volume,
+        *after* step(), and triggers die('quicksand') if the player sinks out of
+        the bottom of the volume."""
+        self.in_quicksand = True
+        self.on_ground = False
+        self.jumping = False
+        self.rolling = False
+        self.gliding = self.flying = self.climbing = self.hovering = False
+        self.homing_active = False
+        self.x_vel *= self.quicksand_drag
+        if inp.jump_pressed:
+            self.z += self.quicksand_climb
+            self.z_vel = 0.0
+        else:
+            self.z -= self.quicksand_sink
+            self.z_vel = 0.0
 
     # ------------------------------------------------------------- BOOSTERS
     def apply_boost(self, sign: int = 0, power: float | None = None) -> bool:
@@ -1158,6 +1719,26 @@ class SonicEngine:
             "Ground_Speed": float(self.ground_speed),
             "Ground_Speed_Absolute": float(abs(self.ground_speed)),
             "Ground_Angle": float(math.degrees(self.ground_angle)),
+            # -- rings / water / quicksand / death -----------------------------
+            "Ring_Count": int(self.ring_count),
+            "Rings_Lost": int(self.rings_lost),
+            "Is_Underwater": bool(self.underwater),
+            "Air_Timer": int(self.air_timer),
+            "In_Quicksand": bool(self.in_quicksand),
+            "Is_On_Ice": bool(self.on_ice),
+            "Is_Dead": bool(self.is_dead),
+            "Is_Sprung": bool(self.sprung),
+            # -- character moves ----------------------------------------------
+            "Is_Flying": bool(self.flying),
+            "Flight_Timer": int(self.flight_timer),
+            "Is_Gliding": bool(self.gliding),
+            "Is_Climbing": bool(self.climbing),
+            "Is_DropDash_Charging": bool(self.dropdash_charging),
+            "DropDash_Ready": bool(self.dropdash_ready),
+            "Is_Homing": bool(self.homing_active),
+            "Is_Boosting": bool(self.boosting),
+            "Boost_Energy": float(self.boost_energy),
+            "Is_Hovering": bool(self.hovering),
         }
 
 
@@ -1171,3 +1752,101 @@ def _asr(value: float, shift: int) -> float:
     domain the important property is that a tiny x speed drags to zero and the
     sign is preserved, which floor division provides."""
     return math.floor(value * 256.0 / (2 ** shift)) / 256.0
+
+
+# =============================================================================
+#  GAME PRESETS
+# =============================================================================
+# Each preset is {"label", "accurate", "values"}.  ``values`` is a flat dict of
+# engine-attribute -> value that the Blender layer copies onto its settings.
+#
+#   accurate == True  -> the Mega Drive / Genesis (and Mania/Superstars) titles,
+#                        whose constants come straight from the disassembly /
+#                        Sonic Physics Guide.
+#   accurate == False -> APPROXIMATIONS.  The 8-bit, Advance, Rush, Colors, 4,
+#                        Generations and Forces engines are not documented at the
+#                        subpixel level the way the Genesis games are; these
+#                        presets are hand-tuned to feel roughly right and enable
+#                        the abilities each game is known for.  Treat them as a
+#                        starting point, not gospel.
+
+_GENESIS_PHYS = dict(
+    acceleration=ACCELERATION, deceleration=DECELERATION, friction=FRICTION,
+    top_speed=TOP_SPEED, air_acceleration=AIR_ACCELERATION, gravity=GRAVITY,
+    jump_force=JUMP_FORCE,
+    slope_factor_walk=SLOPE_FACTOR_WALK,
+    slope_factor_roll_up=SLOPE_FACTOR_ROLL_UP,
+    slope_factor_roll_down=SLOPE_FACTOR_ROLL_DOWN,
+    roll_friction=ROLL_FRICTION, roll_deceleration=ROLL_DECELERATION,
+)
+
+# 8-bit (Master System / Game Gear): no slope momentum, punchier ramp.
+_EIGHTBIT_PHYS = dict(
+    _GENESIS_PHYS, acceleration=0.09375, friction=0.09375,
+    slope_factor_walk=0.0, slope_factor_roll_up=0.0,
+)
+# Dimps handhelds (Advance): close to Genesis, a touch faster on the ramp.
+_ADVANCE_PHYS = dict(_GENESIS_PHYS, acceleration=0.09375)
+# Boost handhelds (Rush / Colors DS): faster, floatier jump.
+_BOOST_PHYS = dict(_GENESIS_PHYS, acceleration=0.09375, top_speed=8.0, jump_force=7.0)
+# Modern boost (Generations / Forces): fast, big jump.
+_MODERN_PHYS = dict(_GENESIS_PHYS, acceleration=0.09375, top_speed=9.0, jump_force=7.5)
+
+_NO_MOVES = dict(
+    enable_spindash=False, enable_peelout=False, enable_flight=False,
+    enable_gliding=False, enable_climbing=False, enable_dropdash=False,
+    enable_homing=False, enable_boost=False, enable_hovering=False,
+)
+
+
+def _pset(label, accurate, phys=None, **moves):
+    values = dict(_GENESIS_PHYS)
+    if phys:
+        values.update(phys)
+    values.update(_NO_MOVES)
+    values.update(moves)
+    return {"label": label, "accurate": accurate, "values": values}
+
+
+# Ordered exactly as requested.
+GAME_PRESETS = {
+    "sonic1":     _pset("Sonic 1", True, enable_spindash=False),
+    "sonic1gg":   _pset("Sonic 1 (Game Gear)", False, phys=_EIGHTBIT_PHYS,
+                        enable_spindash=False),
+    "soniccd":    _pset("Sonic CD", True, enable_spindash=False, enable_peelout=True),
+    "sonic2":     _pset("Sonic 2", True, enable_spindash=True),
+    "sonic2gg":   _pset("Sonic 2 (Game Gear)", False, phys=_EIGHTBIT_PHYS,
+                        enable_spindash=False),
+    "sonic3":     _pset("Sonic 3", True, enable_spindash=True),
+    "sonicblast": _pset("Sonic Blast", False, phys=_EIGHTBIT_PHYS,
+                        enable_spindash=True),
+    "advance1":   _pset("Sonic Advance", False, phys=_ADVANCE_PHYS,
+                        enable_spindash=True),
+    "advance2":   _pset("Sonic Advance 2", False,
+                        phys=dict(_ADVANCE_PHYS, top_speed=8.0),
+                        enable_spindash=True, enable_boost=True),
+    "advance3":   _pset("Sonic Advance 3", False, phys=_ADVANCE_PHYS,
+                        enable_spindash=True),
+    "rush":       _pset("Sonic Rush", False, phys=_BOOST_PHYS,
+                        enable_boost=True, enable_homing=True),
+    "rushadv":    _pset("Sonic Rush Adventure", False, phys=_BOOST_PHYS,
+                        enable_boost=True, enable_homing=True),
+    "colorsds":   _pset("Sonic Colors (DS)", False, phys=_BOOST_PHYS,
+                        enable_boost=True, enable_homing=True),
+    "sonic4e1":   _pset("Sonic 4: Episode I", False,
+                        phys=dict(_GENESIS_PHYS, air_acceleration=0.046875),
+                        enable_spindash=True, enable_homing=True),
+    "sonic4e2":   _pset("Sonic 4: Episode II", False,
+                        enable_spindash=True, enable_homing=True),
+    "genconsole": _pset("Sonic Generations (Console)", False, phys=_MODERN_PHYS,
+                        enable_boost=True, enable_homing=True),
+    "gen3ds":     _pset("Sonic Generations (3DS)", False,
+                        phys=dict(_MODERN_PHYS, top_speed=8.0),
+                        enable_boost=True, enable_homing=True),
+    "mania":      _pset("Sonic Mania", True, enable_spindash=True,
+                        enable_dropdash=True),
+    "forces":     _pset("Sonic Forces", False, phys=_MODERN_PHYS,
+                        enable_boost=True, enable_homing=True),
+    "superstars": _pset("Sonic Superstars", True, enable_spindash=True,
+                        enable_dropdash=True),
+}
